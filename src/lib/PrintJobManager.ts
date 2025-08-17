@@ -300,6 +300,7 @@ export class PrintJobManager extends EventEmitter {
 
 
     // Render a template
+    // This is not used for now, but can be used for future printing.
     private renderTemplate(template: PrintTemplate, data: any): string {
         let content = template.content;
 

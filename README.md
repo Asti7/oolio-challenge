@@ -56,6 +56,33 @@ Leveraging events and deltas as they minimise write conflicts and keep an audit 
 For pruning, I would like to run a background/idle compaction job which will clean up old events and conflicts, will gradually free spaces if the device is close to quota. 
 
 
+## **Brief Code Structure**
+
+### **App Architecture**
+- **Frontend**: React/Preact-based SPA with TypeScript
+- **State Management**: Event-driven architecture using custom EventEmitter
+- **Storage**: IndexedDB for local data persistence
+- **Offline Support**: Queue-based sync system with background processing
+
+### **Core Components**
+- **ProductCatalog**: Product browsing, search, and cart management
+- **ShoppingCart**: Order customization and checkout flow
+- **OrderTracking**: Order status management and history
+- **PrintJobManager**: Print queue handling and job processing
+
+### **Key Classes**
+- **EventEmitter**: Central event bus for component communication
+- **OfflineDataStore**: IndexedDB wrapper for local storage
+- **OrderManager**: Order lifecycle and status management
+- **SyncEngine**: Background synchronization and conflict resolution
+- **PrintJobManager**: Print job queuing and processing
+
+### **Data Flow**
+1. User interactions trigger events
+2. Events update local IndexedDB storage
+3. Changes queued for sync when offline
+4. Background sync processes pending changes
+5. Print jobs automatically generated and processed
 ## **What This Prototype Demonstrates**
 
 This is a **working prototype** that showcases all the required features for a POS order management system:
@@ -195,4 +222,4 @@ Visit: http://localhost:5173
 - **Basic UI**: Focused on functionality over polish
 
 
-**This is foundation that can be extended with real APIs, actual printing, and enhanced UI features. For demo purposes I have focused on implemneation specfics to keep things lean.**
+**This is the foundation that can be extended with real APIs, actual printing, and enhanced UI features. For demo purposes I have focused on implementation specfics to keep things lean.**
