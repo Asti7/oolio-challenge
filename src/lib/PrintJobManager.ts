@@ -320,7 +320,7 @@ export class PrintJobManager {
     }
 
     // Print a job
-    private async printJob(job: PrintJob): Promise<void> {
+    private async printJob(_job: PrintJob): Promise<void> {
         // Simulate printing - in production this would send ESC/POS commands
         await new Promise(resolve => setTimeout(resolve, 2000 + Math.random() * 3000));
 
