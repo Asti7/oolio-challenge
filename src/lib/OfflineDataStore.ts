@@ -200,6 +200,9 @@ export class OfflineDataStore extends EventEmitter {
             if (!db.objectStoreNames.contains('failedTransactions')) {
               db.createObjectStore('failedTransactions', { keyPath: 'id' });
             }
+            if (!db.objectStoreNames.contains('printJobs')) {
+              db.createObjectStore('printJobs', { keyPath: 'id' });
+            }
           };
         });
       }
@@ -225,7 +228,7 @@ export class OfflineDataStore extends EventEmitter {
         if (!this.db) throw new Error('Database not initialized');
     
         return new Promise((resolve, reject) => {
-          const collections = ['products', 'orders', 'syncQueue', 'failedTransactions'];
+          const collections = ['products', 'orders', 'syncQueue', 'failedTransactions', 'printJobs'];
           const transaction = this.db!.transaction(collections, 'readwrite');
           
           operations.forEach(op => {
@@ -251,7 +254,7 @@ export class OfflineDataStore extends EventEmitter {
       private async rollbackOperations(operations: Operation[]): Promise<void> {
         if (!this.db) return;
     
-        const collections = ['products', 'orders', 'syncQueue', 'failedTransactions'];
+        const collections = ['products', 'orders', 'syncQueue', 'failedTransactions', 'printJobs'];
         const transaction = this.db.transaction(collections, 'readwrite');
         
         operations.forEach(op => {

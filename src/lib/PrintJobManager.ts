@@ -1,4 +1,5 @@
 import { OfflineDataStore, DataRecord } from "./OfflineDataStore";
+import { EventEmitter } from "./EventEmitter";
 
 export interface PrintJob extends DataRecord {
     type: 'receipt' | 'kitchen' | 'bar';
@@ -30,14 +31,15 @@ export interface PrintTemplate {
     variables: string[];
 }
 
-export class PrintJobManager {
-    private dataStore: OfflineDataStore = new OfflineDataStore();
+export class PrintJobManager extends EventEmitter {
+    private dataStore: OfflineDataStore;
     private printers: Map<string, Printer> = new Map();
     private templates: Map<string, PrintTemplate> = new Map();
     private isProcessing = false;
 
 
     constructor(dataStore: OfflineDataStore) {
+        super(); // Initialize EventEmitter
         this.dataStore = dataStore;
         this.initializeDefaultTemplates();
         this.startProcessing();
@@ -382,10 +384,5 @@ export class PrintJobManager {
 
     private generateId(): string {
         return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    }
-
-    private emit(event: string, ...args: any[]): void {
-        // Simple event emission - in production you'd use the EventEmitter
-        console.log(`PrintJobManager: ${event}`, ...args);
     }
 }
