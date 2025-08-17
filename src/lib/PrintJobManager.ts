@@ -1,17 +1,31 @@
 import { OfflineDataStore, DataRecord } from "./OfflineDataStore";
 import { EventEmitter } from "./EventEmitter";
 
+// Import Order type from OrderManager
+interface Order {
+    id: string;
+    items: any[];
+    status: string;
+    totalAmount: number;
+    customerName?: string;
+    tableNumber?: number;
+    notes?: string;
+    estimatedCompletion?: number;
+}
+
 export interface PrintJob extends DataRecord {
     type: 'receipt' | 'kitchen' | 'bar';
-    content: string;
+    content?: string;
     priority: 'low' | 'normal' | 'high' | 'urgent';
     status: 'queued' | 'printing' | 'completed' | 'failed';
-    retryCount: number;
-    maxRetries: number;
+    retryCount?: number;
+    maxRetries?: number;
     errorMessage?: string;
     printerId?: string;
-    template: string;
-    data: any;
+    template?: string;
+    data?: any;
+    orderId?: string;
+    order?: any;
 }
 
 export interface Printer {
@@ -73,95 +87,132 @@ export class PrintJobManager extends EventEmitter {
     }
 
     // Queue a print job
-    async queuePrintJob(
-        type: PrintJob['type'],
-        templateId: string,
-        data: any,
-        priority: PrintJob['priority'] = 'normal',
-        printerId?: string
-    ): Promise<PrintJob> {
-        const template = this.templates.get(templateId);
-        if (!template) {
-            throw new Error(`Template ${templateId} not found`);
+    async queuePrintJob(type: PrintJob['type'], printerId: string, order: Order, priority: PrintJob['priority'] = 'normal'): Promise<PrintJob> {
+        try {
+            // Wait for database to be ready
+            await this.dataStore.waitForReady();
+            
+            // Check if collection exists
+            if (!this.dataStore.hasCollection('printJobs')) {
+                throw new Error('printJobs collection does not exist yet');
+            }
+
+            const printJob: PrintJob = {
+                id: this.generateId(),
+                type,
+                printerId,
+                orderId: order.id,
+                order,
+                status: 'queued',
+                priority,
+                retryCount: 0,
+                maxRetries: 3,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                version: 1
+            };
+
+            await this.dataStore.transaction([{
+                type: 'create',
+                collection: 'printJobs',
+                id: printJob.id,
+                data: printJob
+            }]);
+
+            this.emit('printJobQueued', printJob);
+            return printJob;
+        } catch (error) {
+            console.warn('Failed to queue print job:', error);
+            
+            // Provide more specific error messages
+            if (error instanceof Error) {
+                if (error.message.includes('Sync failed')) {
+                    console.warn('Print job queued locally but sync failed. It will be retried when connection is restored.');
+                    // For sync failures, we can't return the printJob since it wasn't created
+                    // The transaction will be queued for retry
+                    throw new Error('Print job creation failed due to sync error. Please try again.');
+                }
+            }
+            
+            throw error;
         }
-
-        const content = this.renderTemplate(template, data);
-
-        const printJob: PrintJob = {
-            id: this.generateId(),
-            type,
-            content,
-            priority,
-            status: 'queued',
-            retryCount: 0,
-            maxRetries: 3,
-            template: templateId,
-            data,
-            printerId,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            version: 1
-        };
-
-        await this.dataStore.transaction([{
-            type: 'create',
-            collection: 'printJobs',
-            id: printJob.id,
-            data: printJob
-        }]);
-
-        this.emit('printJobQueued', printJob);
-        return printJob;
     }
 
 
     // Get all print jobs
     async getPrintJobs(status?: PrintJob['status']): Promise<PrintJob[]> {
-        const jobs = await this.dataStore.getAll<PrintJob>('printJobs');
+        try {
+            // Wait for database to be ready
+            await this.dataStore.waitForReady();
+            
+            // Check if collection exists
+            if (!this.dataStore.hasCollection('printJobs')) {
+                console.warn('printJobs collection does not exist yet');
+                return [];
+            }
+            
+            const jobs = await this.dataStore.getAll<PrintJob>('printJobs');
 
-        if (status) {
-            return jobs.filter(j => j.status === status);
-        }
-
-        return jobs.sort((a, b) => {
-            const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
-            const aPriority = priorityOrder[a.priority];
-            const bPriority = priorityOrder[b.priority];
-
-            if (aPriority !== bPriority) {
-                return aPriority - bPriority;
+            if (status) {
+                return jobs.filter(j => j.status === status);
             }
 
-            // Convert timestamps to numbers for comparison
-            return Number(a.createdAt) - Number(b.createdAt);
-        });
+            return jobs.sort((a, b) => {
+                const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+                const aPriority = priorityOrder[a.priority];
+                const bPriority = priorityOrder[b.priority];
+
+                if (aPriority !== bPriority) {
+                    return aPriority - bPriority;
+                }
+
+                // Convert timestamps to numbers for comparison
+                return Number(a.createdAt) - Number(b.createdAt);
+            });
+        } catch (error) {
+            console.warn('Failed to load print jobs:', error);
+            return [];
+        }
     }
 
     // Retry a failed print job
     async retryFailedJob(jobId: string): Promise<void> {
-        const job = await this.dataStore.get<PrintJob>('printJobs', jobId);
-        if (!job) throw new Error('Print job not found');
+        try {
+            // Wait for database to be ready
+            await this.dataStore.waitForReady();
+            
+            // Check if collection exists
+            if (!this.dataStore.hasCollection('printJobs')) {
+                throw new Error('printJobs collection does not exist yet');
+            }
+            
+            const job = await this.dataStore.get<PrintJob>('printJobs', jobId);
+            if (!job) throw new Error('Print job not found');
 
-        if (job.status !== 'failed') {
-            throw new Error('Can only retry failed jobs');
+            if (job.status !== 'failed') {
+                throw new Error('Can only retry failed jobs');
+            }
+
+            const updatedJob: PrintJob = {
+                ...job,
+                status: 'queued',
+                retryCount: 0,
+                errorMessage: undefined,
+                updatedAt: new Date().toISOString(),
+                version: job.version + 1
+            };
+
+            await this.dataStore.transaction([{
+                type: 'update',
+                collection: 'printJobs',
+                id: jobId,
+                data: updatedJob,
+                previousData: job
+            }]);
+        } catch (error) {
+            console.warn('Failed to retry print job:', error);
+            throw error;
         }
-
-        const updatedJob: PrintJob = {
-            ...job,
-            status: 'queued',
-            retryCount: 0,
-            errorMessage: undefined,
-            updatedAt: new Date().toISOString(),
-            version: job.version + 1
-        };
-
-        await this.dataStore.transaction([{
-            type: 'update',
-            collection: 'printJobs',
-            id: jobId,
-            data: updatedJob,
-            previousData: job
-        }]);
     }
 
     // Stop the processing loop
@@ -334,52 +385,83 @@ export class PrintJobManager extends EventEmitter {
 
     // Handle a print error
     private async handlePrintError(job: PrintJob, error: Error): Promise<void> {
-        const updatedJob: PrintJob = {
-            ...job,
-            retryCount: job.retryCount + 1,
-            errorMessage: error.message,
-            updatedAt: new Date().toISOString(),
-            version: job.version + 1
-        };
+        try {
+            // Wait for database to be ready
+            await this.dataStore.waitForReady();
+            
+            // Check if collection exists
+            if (!this.dataStore.hasCollection('printJobs')) {
+                console.warn('printJobs collection does not exist yet');
+                return;
+            }
+            
+            const currentRetryCount = job.retryCount || 0;
+            const maxRetries = job.maxRetries || 3;
+            
+            const updatedJob: PrintJob = {
+                ...job,
+                retryCount: currentRetryCount + 1,
+                errorMessage: error.message,
+                updatedAt: new Date().toISOString(),
+                version: job.version + 1
+            };
 
-        if (job.retryCount >= job.maxRetries) {
-            updatedJob.status = 'failed';
-        } else {
-            updatedJob.status = 'queued';
-            // Exponential backoff
-            await new Promise(resolve =>
-                setTimeout(resolve, Math.pow(2, job.retryCount) * 1000)
-            );
+            if (currentRetryCount >= maxRetries) {
+                updatedJob.status = 'failed';
+            } else {
+                updatedJob.status = 'queued';
+                // Exponential backoff
+                await new Promise(resolve =>
+                    setTimeout(resolve, Math.pow(2, currentRetryCount) * 1000)
+                );
+            }
+
+            await this.dataStore.transaction([{
+                type: 'update',
+                collection: 'printJobs',
+                id: job.id,
+                data: updatedJob,
+                previousData: job
+            }]);
+        } catch (updateError) {
+            console.warn('Failed to handle print error:', updateError);
+            throw updateError;
         }
-
-        await this.dataStore.transaction([{
-            type: 'update',
-            collection: 'printJobs',
-            id: job.id,
-            data: updatedJob,
-            previousData: job
-        }]);
     }
 
     // Update the status of a print job
     private async updateJobStatus(jobId: string, status: PrintJob['status']): Promise<void> {
-        const job = await this.dataStore.get<PrintJob>('printJobs', jobId);
-        if (!job) return;
+        try {
+            // Wait for database to be ready
+            await this.dataStore.waitForReady();
+            
+            // Check if collection exists
+            if (!this.dataStore.hasCollection('printJobs')) {
+                console.warn('printJobs collection does not exist yet');
+                return;
+            }
+            
+            const job = await this.dataStore.get<PrintJob>('printJobs', jobId);
+            if (!job) return;
 
-        const updatedJob: PrintJob = {
-            ...job,
-            status,
-            updatedAt: new Date().toISOString(),
-            version: job.version + 1
-        };
+            const updatedJob: PrintJob = {
+                ...job,
+                status,
+                updatedAt: new Date().toISOString(),
+                version: job.version + 1
+            };
 
-        await this.dataStore.transaction([{
-            type: 'update',
-            collection: 'printJobs',
-            id: jobId,
-            data: updatedJob,
-            previousData: job
-        }]);
+            await this.dataStore.transaction([{
+                type: 'update',
+                collection: 'printJobs',
+                id: jobId,
+                data: updatedJob,
+                previousData: job
+            }]);
+        } catch (error) {
+            console.warn('Failed to update print job status:', error);
+            throw error;
+        }
     }
 
     private generateId(): string {

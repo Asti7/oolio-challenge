@@ -79,13 +79,22 @@ export class OfflineDataStore extends EventEmitter {
           }
     
           // Try to sync immediately if online.
-          await this.syncTransaction(transaction);
-          transaction.status = 'committed';
-          this.emit('transactionCommitted', transaction);
-          return transaction as T;
+          try {
+            await this.syncTransaction(transaction);
+            transaction.status = 'committed';
+            this.emit('transactionCommitted', transaction);
+            return transaction as T;
+          } catch (syncError) {
+            // If sync fails, queue the transaction for later retry instead of rolling back
+            console.warn('Sync failed, queuing transaction for retry:', syncError);
+            await this.queueTransaction(transaction);
+            transaction.status = 'committed';
+            this.emit('transactionCommitted', transaction);
+            return transaction as T;
+          }
     
         } catch (error) {
-          // Rollback on error
+          // Rollback on error (only for non-sync related errors)
           await this.rollbackOperations(operations);
           transaction.status = 'rolledback';
           this.emit('transactionRolledBack', transaction, error);
@@ -105,6 +114,7 @@ export class OfflineDataStore extends EventEmitter {
             await this.syncTransaction(transaction);
             await this.removeFromSyncQueue(transaction.id);
             this.syncStatus.pendingChanges--;
+            this.emit('syncSuccess', transaction);
           } catch (error: unknown) {
             if (error instanceof Error) {
               this.syncStatus.syncErrors.push(error.message);
@@ -114,11 +124,38 @@ export class OfflineDataStore extends EventEmitter {
               this.syncStatus.syncErrors.push(errorMessage);
               this.emit('syncError', new Error(errorMessage), transaction);
             }
+            
+            // Don't remove from queue on failure - let it retry later
+            // This prevents losing transactions due to temporary sync failures
           }
         }
   
         this.syncStatus.lastSync = Date.now();
         this.emit('syncStatusChanged', this.syncStatus);
+      }
+
+      // Retry failed sync transactions
+      async retryFailedSync(): Promise<void> {
+        if (!this.db || !this.isOnline) return;
+        
+        // Clear old sync errors
+        this.syncStatus.syncErrors = [];
+        
+        // Process the sync queue again
+        await this.processSyncQueue();
+      }
+
+      // Clear sync errors
+      clearSyncErrors(): void {
+        this.syncStatus.syncErrors = [];
+        this.emit('syncStatusChanged', this.syncStatus);
+      }
+
+      // Get sync queue length
+      async getSyncQueueLength(): Promise<number> {
+        if (!this.db) return 0;
+        const queue = await this.getQueuedTransactions();
+        return queue.length;
       }
 
 
@@ -164,6 +201,37 @@ export class OfflineDataStore extends EventEmitter {
         return { ...this.syncStatus };
       }
 
+    // Check if a collection exists
+    hasCollection(collection: string): boolean {
+        return this.db?.objectStoreNames.contains(collection) || false;
+    }
+
+    // Wait for database to be ready
+    async waitForReady(): Promise<void> {
+        if (this.db) return;
+        
+        return new Promise((resolve) => {
+            if (this.db) {
+                resolve();
+            } else {
+                this.once('dbReady', resolve);
+            }
+        });
+    }
+
+    // Public method to manually trigger sync
+    async syncNow(): Promise<void> {
+      if (!this.isOnline) {
+        throw new Error('Cannot sync while offline');
+      }
+      await this.processSyncQueue();
+    }
+
+    // Check if currently online
+    getOnlineStatus(): boolean {
+      return this.isOnline;
+    }
+
 
     ///////////////////////
     // Private methods.
@@ -172,7 +240,7 @@ export class OfflineDataStore extends EventEmitter {
     // Initialize the database.
     private async initializeDB(): Promise<void> {
         return new Promise((resolve, reject) => {
-          const request = indexedDB.open(this.dbName, 1);
+          const request = indexedDB.open(this.dbName, 2); // Updated version to 2
           
           request.onerror = () => reject(request.error);
           request.onsuccess = () => {
@@ -295,9 +363,10 @@ export class OfflineDataStore extends EventEmitter {
         // For demo, simulate the sync
         await new Promise(resolve => setTimeout(resolve, 100));
         
-        if (Math.random() < 0.1) { // 10% failure rate for testing
-          throw new Error('Sync failed');
-        }
+        // Remove the deliberate failure rate for production use
+        // if (Math.random() < 0.1) { // 10% failure rate for testing
+        //   throw new Error('Sync failed');
+        // }
       }
     
       
