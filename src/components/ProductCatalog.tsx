@@ -188,12 +188,9 @@ export function ProductCatalog({ products, onAddToCart }: ProductCatalogProps) {
               <div class="product-placeholder">{product.name.charAt(0)}</div>
             </div>
             <div class="product-info">
-              <h3 class="product-name">{product.name}</h3>
+              <h4>{product.name}</h4>
               <p class="product-category">{product.category}</p>
-              <p class="product-price">${product.price.toFixed(2)}</p>
-              {product.description && (
-                <p class="product-description">{product.description}</p>
-              )}
+              <p>${product.price.toFixed(2)}</p>
             </div>
           </div>
         ))}
