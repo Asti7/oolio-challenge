@@ -24,16 +24,18 @@ export interface Operation {
     previousData?: any;
 }
 
-export interface Transaction {
+export interface Transaction extends DataRecord {
     id: string;
     operations: Operation[];
     timestamp: number;
     status: 'pending' | 'committed' | 'rolledback';
+    createdAt: string;
+    updatedAt: string;
+    version: number;
 }
 
 export class OfflineDataStore extends EventEmitter {
     private db: IDBDatabase | null = null;
-    private syncQueue: Transaction[] = [];
     private isOnline = navigator.onLine;
     private syncStatus: SyncStatus = {
       lastSync: 0,
@@ -58,7 +60,10 @@ export class OfflineDataStore extends EventEmitter {
           id: this.generateId(),
           operations,
           timestamp: Date.now(),
-          status: 'pending'
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          version: 1
         };
     
         try {
@@ -192,6 +197,9 @@ export class OfflineDataStore extends EventEmitter {
             if (!db.objectStoreNames.contains('syncQueue')) {
               db.createObjectStore('syncQueue', { keyPath: 'id' });
             }
+            if (!db.objectStoreNames.contains('failedTransactions')) {
+              db.createObjectStore('failedTransactions', { keyPath: 'id' });
+            }
           };
         });
       }
@@ -217,7 +225,8 @@ export class OfflineDataStore extends EventEmitter {
         if (!this.db) throw new Error('Database not initialized');
     
         return new Promise((resolve, reject) => {
-          const transaction = this.db!.transaction(['products', 'orders'], 'readwrite');
+          const collections = ['products', 'orders', 'syncQueue', 'failedTransactions'];
+          const transaction = this.db!.transaction(collections, 'readwrite');
           
           operations.forEach(op => {
             const store = transaction.objectStore(op.collection);
@@ -242,7 +251,8 @@ export class OfflineDataStore extends EventEmitter {
       private async rollbackOperations(operations: Operation[]): Promise<void> {
         if (!this.db) return;
     
-        const transaction = this.db.transaction(['products', 'orders'], 'readwrite');
+        const collections = ['products', 'orders', 'syncQueue', 'failedTransactions'];
+        const transaction = this.db.transaction(collections, 'readwrite');
         
         operations.forEach(op => {
           const store = transaction.objectStore(op.collection);
@@ -277,7 +287,7 @@ export class OfflineDataStore extends EventEmitter {
       }
     
       // Sync transaction.
-      private async syncTransaction(transaction: Transaction): Promise<void> {
+      private async syncTransaction(_transaction: Transaction): Promise<void> {
         // Some sort of REST API
         // For demo, simulate the sync
         await new Promise(resolve => setTimeout(resolve, 100));
