@@ -25,7 +25,7 @@ Leveraging events and deltas as they minimise write conflicts and keep an audit 
 
 **a**. Since, the devices are memory conscious, I’ll reduce memory pressure by storing large data (orders, catalogs) in IndexedDB, not in JS memory. I can leverage web workers for background sync so the main thread stays light. Will periodically prune caches and old orders e.g, keep only for 30 days.
 
-**b**. Leverage a light weight framework like Preact or Svelte, use magnification so unused code drops out, I’ll try to avoid heavy dependencies, can caches assets with a service worker so that they are not re-downloaded, on the runtime side I can minimise re-renders by memoizing components and keeping state updates small and granular.
+**b**. Leverage a light weight framework like Preact or Svelte, use minification so unused code drops out, I’ll try to avoid heavy dependencies, can caches assets with a service worker so that they are not re-downloaded, on the runtime side I can minimise re-renders by memoizing components and keeping state updates small and granular.
 
 **c**. For low ram tablets, can use virtualised long lists to keep the DOM small. Reuse DOM nodes where possible instead of recreating them, I’ll clean up event listeners and timers when components unmount, can use debouncing like using requestIdleCallback for background work.
 
