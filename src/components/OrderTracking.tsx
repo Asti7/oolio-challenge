@@ -1,12 +1,13 @@
 import { useState, useMemo, useCallback } from 'preact/hooks';
-import { Order } from '../lib/OrderManager';
+import { Order, Product } from '../lib/OrderManager';
 
 interface OrderTrackingProps {
   orders: Order[];
+  products: Product[];
   onUpdateStatus: (orderId: string, status: Order['status']) => void;
 }
 
-export function OrderTracking({ orders, onUpdateStatus }: OrderTrackingProps) {
+export function OrderTracking({ orders, products, onUpdateStatus }: OrderTrackingProps) {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [filterStatus, setFilterStatus] = useState<Order['status'] | ''>('');
 
@@ -72,6 +73,12 @@ export function OrderTracking({ orders, onUpdateStatus }: OrderTrackingProps) {
     }
   }, [onUpdateStatus, orders]);
 
+  // Get product name by ID
+  const getProductName = useCallback((productId: string) => {
+    const product = products.find(p => p.id === productId);
+    return product?.name || `Product ${productId}`;
+  }, [products]);
+
   // Get next status for an order
   const getNextStatus = useCallback((currentStatus: Order['status']): Order['status'] | null => {
     switch (currentStatus) {
@@ -129,7 +136,7 @@ export function OrderTracking({ orders, onUpdateStatus }: OrderTrackingProps) {
                     <div class="order-items">
                       {order.items.slice(0, 2).map((item, index) => (
                         <span key={index} class="order-item">
-                          {item.quantity}x {item.productId}
+                          {item.quantity}x {getProductName(item.productId)}
                         </span>
                       ))}
                       {order.items.length > 2 && (
@@ -202,7 +209,7 @@ export function OrderTracking({ orders, onUpdateStatus }: OrderTrackingProps) {
                   <div key={index} class="detail-item">
                     <div class="item-main">
                       <span class="item-quantity">{item.quantity}x</span>
-                      <span class="item-name">{item.productId}</span>
+                      <span class="item-name">{getProductName(item.productId)}</span>
                       <span class="item-price">${item.totalPrice.toFixed(2)}</span>
                     </div>
                     

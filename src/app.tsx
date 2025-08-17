@@ -6,6 +6,7 @@ import { SyncEngine } from './lib/SyncEngine';
 import { ProductCatalog } from './components/ProductCatalog';
 import { ShoppingCart } from './components/ShoppingCart';
 import { OrderTracking } from './components/OrderTracking';
+import { sampleProducts } from './lib/sampleData';
 import './app.css';
 
 export function App() {
@@ -13,7 +14,7 @@ export function App() {
   const [orderManager] = useState(() => new OrderManager(dataStore));
   const [printManager] = useState(() => new PrintJobManager(dataStore));
   const [syncEngine] = useState(() => new SyncEngine(dataStore, {
-    apiBaseUrl: 'https://api.oolio.com',
+    apiBaseUrl: 'https://api.oolio.com.placeholder', // This is a placeholder for the API URL, for now.
     syncInterval: 30000, // 30 seconds
     batchSize: 50
   }));
@@ -266,64 +267,6 @@ export function App() {
   const generateSampleProducts = useCallback(async () => {
     if (products.length > 0) return;
 
-    const sampleProducts: Omit<Product, 'id' | 'createdAt' | 'updatedAt' | 'version'>[] = [
-      {
-        name: 'Classic Burger',
-        price: 12.99,
-        category: 'Burgers',
-        description: 'Juicy beef patty with lettuce, tomato, and special sauce',
-        available: true,
-        customizationOptions: [
-          { id: 'cheese', name: 'Extra Cheese', price: 1.50, required: false },
-          { id: 'bacon', name: 'Bacon', price: 2.00, required: false },
-          { id: 'avocado', name: 'Avocado', price: 1.75, required: false }
-        ]
-      },
-      {
-        name: 'Margherita Pizza',
-        price: 16.99,
-        category: 'Pizza',
-        description: 'Fresh mozzarella, tomato sauce, and basil',
-        available: true,
-        customizationOptions: [
-          { id: 'pepperoni', name: 'Pepperoni', price: 2.50, required: false },
-          { id: 'mushrooms', name: 'Mushrooms', price: 1.50, required: false },
-          { id: 'olives', name: 'Black Olives', price: 1.25, required: false }
-        ]
-      },
-      {
-        name: 'Caesar Salad',
-        price: 9.99,
-        category: 'Salads',
-        description: 'Crisp romaine lettuce with Caesar dressing and croutons',
-        available: true,
-        customizationOptions: [
-          { id: 'chicken', name: 'Grilled Chicken', price: 3.00, required: false },
-          { id: 'shrimp', name: 'Shrimp', price: 4.50, required: false }
-        ]
-      },
-      {
-        name: 'Pasta Carbonara',
-        price: 14.99,
-        category: 'Pasta',
-        description: 'Spaghetti with eggs, cheese, pancetta, and black pepper',
-        available: true,
-        customizationOptions: [
-          { id: 'shrimp', name: 'Shrimp', price: 4.50, required: false }
-        ]
-      },
-      {
-        name: 'Chocolate Cake',
-        price: 7.99,
-        category: 'Desserts',
-        description: 'Rich chocolate layer cake with chocolate frosting',
-        available: true,
-        customizationOptions: [
-          { id: 'ice-cream', name: 'Vanilla Ice Cream', price: 2.00, required: false }
-        ]
-      }
-    ];
-
     try {
       for (const productData of sampleProducts) {
         await orderManager.addProduct(productData);
@@ -426,6 +369,7 @@ export function App() {
         {activeTab === 'cart' && (
           <ShoppingCart
             cart={cart}
+            products={products}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
             onClearCart={handleClearCart}
@@ -436,6 +380,7 @@ export function App() {
         {activeTab === 'tracking' && (
           <OrderTracking
             orders={orders}
+            products={products}
             onUpdateStatus={handleUpdateStatus}
           />
         )}
@@ -451,6 +396,23 @@ export function App() {
         </div>
         <div class="status-item">
           <strong>Local Storage:</strong> {orders.length} orders, {products.length} products
+        </div>
+        <div class="status-item">
+          <button 
+            class="reset-btn" 
+            onClick={() => {
+              if (confirm('This will clear all local data and reload the app. Continue?')) {
+                // Clear IndexedDB
+                const request = indexedDB.deleteDatabase('oolio-offline-store');
+                request.onsuccess = () => {
+                  // Reload the page
+                  window.location.reload();
+                };
+              }
+            }}
+          >
+            Reset Data
+          </button>
         </div>
       </div>
 

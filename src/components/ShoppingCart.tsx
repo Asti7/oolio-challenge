@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'preact/hooks';
-import { Cart } from '../lib/OrderManager';
+import { Cart, Product } from '../lib/OrderManager';
 
 interface ShoppingCartProps {
   cart: Cart;
+  products: Product[];
   onUpdateQuantity: (index: number, quantity: number) => void;
   onRemoveItem: (index: number) => void;
   onClearCart: () => void;
@@ -11,6 +12,7 @@ interface ShoppingCartProps {
 
 export function ShoppingCart({ 
   cart, 
+  products, 
   onUpdateQuantity, 
   onRemoveItem, 
   onClearCart, 
@@ -43,6 +45,12 @@ export function ShoppingCart({
     setShowOrderForm(false);
   }, [customerName, tableNumber, notes, onCreateOrder]);
 
+  // Get product name by ID
+  const getProductName = useCallback((productId: string) => {
+    const product = products.find(p => p.id === productId);
+    return product?.name || `Product ${productId}`;
+  }, [products]);
+
   // Format price consistently
   const formatPrice = useCallback((price: number) => {
     return `$${price.toFixed(2)}`;
@@ -72,7 +80,7 @@ export function ShoppingCart({
           <div key={`${item.productId}-${index}`} class="cart-item">
             <div class="item-info">
               <h4 class="item-name">
-                {item.productId} {/* We'll need to get product name from products list */}
+                {getProductName(item.productId)}
               </h4>
               
               {item.customizations.length > 0 && (

@@ -194,6 +194,22 @@ body {
   margin-bottom: 0.25rem;
 }
 
+.reset-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background-color 0.2s;
+  margin-top: 0.5rem;
+}
+
+.reset-btn:hover {
+  background: #c82333;
+}
+
 /* Footer */
 .app-footer {
   background-color: #f8f9fa;
